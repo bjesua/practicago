@@ -26,9 +26,9 @@ func init() {
 	dbName := os.Getenv("DB_NAME")
 	dbHost := os.Getenv("DB_HOST")
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", dbUser, dbPassword, dbHost, dbName)
+	conn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", dbUser, dbPassword, dbHost, dbName)
 
-	db, err = sql.Open("mysql", dsn)
+	db, err = sql.Open("mysql", conn)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,7 +36,27 @@ func init() {
 	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Conexión a la base de datos MySQL exitosa.")
+
+	table_migration := `	
+		CREATE TABLE IF NOT EXISTS songs_v2 (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		name VARCHAR(255),
+		artist VARCHAR(255),
+		album VARCHAR(255),
+		artwork VARCHAR(255),
+		duration VARCHAR(50),
+		price VARCHAR(10),
+		origin VARCHAR(50)
+	);
+	`
+
+	rows, err := db.Query(table_migration)
+	if err != nil {
+		log.Println("Error al migrar la tabla")
+	}
+	defer rows.Close()
+
+	log.Println("Conectado.")
 }
 
 func AuthMiddleware() gin.HandlerFunc {
@@ -181,14 +201,14 @@ func ExternalData(c *gin.Context) {
 }
 
 func CreateSong(song NewData) error {
-	query := "INSERT INTO songs (name, artist, album, artwork, duration, price, origin) VALUES (?, ?, ?, ?, ?, ?, ?)"
+	query := "INSERT INTO songs_v2 (name, artist, album, artwork, duration, price, origin) VALUES (?, ?, ?, ?, ?, ?, ?)"
 	_, err := db.Exec(query, song.Name, song.Artist, song.Album, song.Artwork, song.Duration, song.Price, song.Origin)
 	return err
 }
 
 // Estructura para parsear el XML de ChartLyrics
 type ArrayOfSearchLyricResult struct {
-	SearchLyricResults []SearchLyricResult `xml:"SearchLyricResult"`
+	SearchLyricResults []SearchLyricResult // `xml:"SearchLyricResult"`
 }
 
 type SearchLyricResult struct {
@@ -235,22 +255,16 @@ func getDataChartLyrics(artist string, song string) ([]NewData, error) {
 }
 
 func show_results(song string, artist string, album string) ([]NewData, error) {
-	// Inicializar la consulta base
-	query := "SELECT id, name, artist, album, artwork, price, origin, duration FROM songs WHERE id <> ''"
-
-	// var params []interface{}
+	query := "SELECT id, name, artist, album, artwork, price, origin, duration FROM songs_v2 WHERE id <> ''"
 
 	if song != "" {
 		query += " or name = '%" + song + "%'"
-		// params = append(params, song)
 	}
 	if artist != "" {
 		query += " or artist = '%" + artist + "%'"
-		// params = append(params, artist)
 	}
 	if album != "" {
 		query += " or album = '%" + album + "%'"
-		// params = append(params, album)
 	}
 
 	fmt.Println(query)
