@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"os"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -18,12 +20,23 @@ var db *sql.DB
 
 func init() {
 	var err error
-	dsn := "root:root@tcp(127.0.0.1:3306)/database"
+
+	// Obtener las variables de entorno
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+	dbHost := os.Getenv("DB_HOST")
+
+	// Construir el Data Source Name (DSN)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", dbUser, dbPassword, dbHost, dbName)
+
+	// Abrir la conexión a la base de datos
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Comprobar si la conexión es exitosa
 	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
@@ -33,7 +46,7 @@ func init() {
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("API-Key")
-		secret := "Tribal_Token"
+		secret := os.Getenv("SECRET_KEY")
 		if apiKey != secret {
 			c.JSON(401, gin.H{"error": "Unauthorized"})
 			c.Abort()
@@ -52,7 +65,7 @@ func main() {
 
 	router.GET("/api", ExternalData)
 
-	router.Run(":8080")
+	router.Run(":8081")
 }
 
 func fetchDataFromURL(url string) (string, error) {
@@ -98,7 +111,7 @@ func ExternalData(c *gin.Context) {
 	album := c.Query("album")
 
 	// Construir la URL de búsqueda
-	url := "https://itunes.apple.com/search?term=" + url.QueryEscape(song) + "+" + url.QueryEscape(artist) + "+" + url.QueryEscape(album)
+	url := os.Getenv("PATH_APPLE") + url.QueryEscape(song) + "+" + url.QueryEscape(artist) + "+" + url.QueryEscape(album)
 
 	data, err := fetchDataFromURL(url)
 	if err != nil {
@@ -194,7 +207,8 @@ type SearchLyricResult struct {
 }
 
 func getDataChartLyrics(artist string, song string) ([]NewData, error) {
-	searchURL := "http://api.chartlyrics.com/apiv1.asmx/SearchLyric?artist=" + url.QueryEscape(artist) + "&song=" + url.QueryEscape(song)
+	// searchURL := "http://api.chartlyrics.com/apiv1.asmx/SearchLyric?artist=" + url.QueryEscape(artist) + "&song=" + url.QueryEscape(song)
+	searchURL := os.Getenv("CHARTLYRICS_API") + url.QueryEscape(artist) + "&song=" + url.QueryEscape(song)
 
 	data, err := fetchDataFromURL(searchURL)
 	if err != nil {
