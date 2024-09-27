@@ -21,22 +21,18 @@ var db *sql.DB
 func init() {
 	var err error
 
-	// Obtener las variables de entorno
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 	dbHost := os.Getenv("DB_HOST")
 
-	// Construir el Data Source Name (DSN)
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", dbUser, dbPassword, dbHost, dbName)
 
-	// Abrir la conexión a la base de datos
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Comprobar si la conexión es exitosa
 	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
@@ -207,7 +203,7 @@ type SearchLyricResult struct {
 }
 
 func getDataChartLyrics(artist string, song string) ([]NewData, error) {
-	// searchURL := "http://api.chartlyrics.com/apiv1.asmx/SearchLyric?artist=" + url.QueryEscape(artist) + "&song=" + url.QueryEscape(song)
+
 	searchURL := os.Getenv("CHARTLYRICS_API") + url.QueryEscape(artist) + "&song=" + url.QueryEscape(song)
 
 	data, err := fetchDataFromURL(searchURL)
@@ -227,7 +223,7 @@ func getDataChartLyrics(artist string, song string) ([]NewData, error) {
 			ID:       result.TrackId,
 			Name:     result.Song,
 			Artist:   result.Artist,
-			Album:    "", // No hay información sobre el álbum
+			Album:    "",
 			Artwork:  result.ArtistUrl,
 			Price:    0,
 			Origin:   "ChartLyrics",
@@ -257,7 +253,6 @@ func show_results(song string, artist string, album string) ([]NewData, error) {
 		// params = append(params, album)
 	}
 
-	// Imprimir la consulta para depuración
 	fmt.Println(query)
 
 	rows, err := db.Query(query)
@@ -266,28 +261,22 @@ func show_results(song string, artist string, album string) ([]NewData, error) {
 	}
 	defer rows.Close()
 
-	// Slice para almacenar los resultados
 	var databasedata []NewData
 
-	// Recorrer las filas devueltas por la consulta
 	for rows.Next() {
 		var song NewData
 
-		// Escanear cada fila y asignar a la estructura song
 		err = rows.Scan(&song.ID, &song.Name, &song.Artist, &song.Album, &song.Artwork, &song.Price, &song.Origin, &song.Duration)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning data: %v", err)
 		}
 
-		// Añadir la canción a la lista de resultados
 		databasedata = append(databasedata, song)
 	}
 
-	// Comprobar si hubo algún error al recorrer las filas
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error during rows iteration: %v", err)
 	}
 
-	// Retornar los resultados
 	return databasedata, nil
 }
