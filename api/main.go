@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"os"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -18,7 +20,14 @@ var db *sql.DB
 
 func init() {
 	var err error
-	dsn := "root:root@tcp(127.0.0.1:3306)/database"
+
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+	dbHost := os.Getenv("DB_HOST")
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s", dbUser, dbPassword, dbHost, dbName)
+
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
@@ -33,7 +42,7 @@ func init() {
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("API-Key")
-		secret := "Tribal_Token"
+		secret := os.Getenv("SECRET_KEY")
 		if apiKey != secret {
 			c.JSON(401, gin.H{"error": "Unauthorized"})
 			c.Abort()
@@ -52,7 +61,7 @@ func main() {
 
 	router.GET("/api", ExternalData)
 
-	router.Run(":8080")
+	router.Run(":8081")
 }
 
 func fetchDataFromURL(url string) (string, error) {
@@ -98,7 +107,7 @@ func ExternalData(c *gin.Context) {
 	album := c.Query("album")
 
 	// Construir la URL de búsqueda
-	url := "https://itunes.apple.com/search?term=" + url.QueryEscape(song) + "+" + url.QueryEscape(artist) + "+" + url.QueryEscape(album)
+	url := os.Getenv("PATH_APPLE") + url.QueryEscape(song) + "+" + url.QueryEscape(artist) + "+" + url.QueryEscape(album)
 
 	data, err := fetchDataFromURL(url)
 	if err != nil {
@@ -194,7 +203,8 @@ type SearchLyricResult struct {
 }
 
 func getDataChartLyrics(artist string, song string) ([]NewData, error) {
-	searchURL := "http://api.chartlyrics.com/apiv1.asmx/SearchLyric?artist=" + url.QueryEscape(artist) + "&song=" + url.QueryEscape(song)
+
+	searchURL := os.Getenv("CHARTLYRICS_API") + url.QueryEscape(artist) + "&song=" + url.QueryEscape(song)
 
 	data, err := fetchDataFromURL(searchURL)
 	if err != nil {
@@ -213,7 +223,7 @@ func getDataChartLyrics(artist string, song string) ([]NewData, error) {
 			ID:       result.TrackId,
 			Name:     result.Song,
 			Artist:   result.Artist,
-			Album:    "", // No hay información sobre el álbum
+			Album:    "",
 			Artwork:  result.ArtistUrl,
 			Price:    0,
 			Origin:   "ChartLyrics",
@@ -243,7 +253,6 @@ func show_results(song string, artist string, album string) ([]NewData, error) {
 		// params = append(params, album)
 	}
 
-	// Imprimir la consulta para depuración
 	fmt.Println(query)
 
 	rows, err := db.Query(query)
@@ -252,28 +261,22 @@ func show_results(song string, artist string, album string) ([]NewData, error) {
 	}
 	defer rows.Close()
 
-	// Slice para almacenar los resultados
 	var databasedata []NewData
 
-	// Recorrer las filas devueltas por la consulta
 	for rows.Next() {
 		var song NewData
 
-		// Escanear cada fila y asignar a la estructura song
 		err = rows.Scan(&song.ID, &song.Name, &song.Artist, &song.Album, &song.Artwork, &song.Price, &song.Origin, &song.Duration)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning data: %v", err)
 		}
 
-		// Añadir la canción a la lista de resultados
 		databasedata = append(databasedata, song)
 	}
 
-	// Comprobar si hubo algún error al recorrer las filas
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error during rows iteration: %v", err)
 	}
 
-	// Retornar los resultados
 	return databasedata, nil
 }
