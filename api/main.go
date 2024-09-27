@@ -100,13 +100,6 @@ func ExternalData(c *gin.Context) {
 	// Construir la URL de búsqueda
 	url := "https://itunes.apple.com/search?term=" + url.QueryEscape(song) + "+" + url.QueryEscape(artist) + "+" + url.QueryEscape(album)
 
-	// Llamar a la función que obtiene los datos de ChartLyrics
-	lyricsData, err := getDataChartLyrics(artist, song)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	data, err := fetchDataFromURL(url)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -137,17 +130,25 @@ func ExternalData(c *gin.Context) {
 		})
 	}
 
-	for _, result := range lyricsData {
-		newData = append(newData, NewData{
-			ID:       result.ID,
-			Name:     result.Name,
-			Artist:   result.Artist,
-			Album:    result.Album,
-			Artwork:  result.Artwork,
-			Price:    result.Price,
-			Origin:   result.Origin,
-			Duration: result.Duration,
-		})
+	// Llamada a ChartLyrics
+	if song != "" && artist != "" {
+		lyricsData, err := getDataChartLyrics(artist, song)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		for _, result := range lyricsData {
+			newData = append(newData, NewData{
+				ID:       result.ID,
+				Name:     result.Name,
+				Artist:   result.Artist,
+				Album:    result.Album,
+				Artwork:  result.Artwork,
+				Price:    result.Price,
+				Origin:   result.Origin,
+				Duration: result.Duration,
+			})
+		}
 	}
 
 	for _, song := range newData {
@@ -223,40 +224,29 @@ func getDataChartLyrics(artist string, song string) ([]NewData, error) {
 	return newData, nil
 }
 
-func show_results(song, artist, album string) ([]NewData, error) {
+func show_results(song string, artist string, album string) ([]NewData, error) {
 	// Inicializar la consulta base
-	query := "SELECT id, name, artist, album, artwork, price, origin, duration FROM songs"
+	query := "SELECT id, name, artist, album, artwork, price, origin, duration FROM songs WHERE id <> ''"
 
-	// Utilizar un slice para agregar condiciones de forma dinámica
-	// var conditions []string
 	// var params []interface{}
 
-	// // Construir dinámicamente el WHERE dependiendo de los valores recibidos
-	// if song != "" {
-	// 	conditions = append(conditions, "name = ?")
-	// 	params = append(params, song)
-	// }
-	// if artist != "" {
-	// 	conditions = append(conditions, "artist = ?")
-	// 	params = append(params, artist)
-	// }
-	// if album != "" {
-	// 	conditions = append(conditions, "album = ?")
-	// 	params = append(params, album)
-	// }
+	if song != "" {
+		query += " or name = '%" + song + "%'"
+		// params = append(params, song)
+	}
+	if artist != "" {
+		query += " or artist = '%" + artist + "%'"
+		// params = append(params, artist)
+	}
+	if album != "" {
+		query += " or album = '%" + album + "%'"
+		// params = append(params, album)
+	}
 
-	// // Si hay condiciones, agregarlas a la consulta
-	// if len(conditions) > 0 {
-	// 	query = fmt.Sprintf("%s WHERE %s", query, strings.Join(conditions, " AND "))
-	// }
+	// Imprimir la consulta para depuración
+	fmt.Println(query)
 
-	// Imprimir la consulta y los parámetros para depuración
-	// fmt.Println("Generated Query:", query)
-	// fmt.Println("Query Parameters:", params)
-	// return []NewData{}, nil
-	// Ejecutar la consulta con los parámetros
 	rows, err := db.Query(query)
-	// rows, err := db.Query(query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching data: %v", err)
 	}
